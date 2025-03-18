@@ -20,24 +20,25 @@ import java.io.PrintWriter;
 
 public class Index5 {
 
-    //--------------------------------------------
-    int N = 0;
-    public Map<Integer, SourceRecord> sources;  // store the doc_id and the file name.
+    // Class variables
+    int N = 0;  // Total number of documents in the collection
+    public Map<Integer, SourceRecord> sources;  // store the doc_id and the file name.  Maps document IDs to document metadata
 
-    public HashMap<String, DictEntry> index; // THe inverted index
-    //--------------------------------------------
+    public HashMap<String, DictEntry> index; // THe inverted index: term -> DictEntry with posting list
 
+    // Constructor initializes data structures
     public Index5() {
         sources = new HashMap<Integer, SourceRecord>();
         index = new HashMap<String, DictEntry>();
     }
 
+    // Sets the total number of documents
     public void setN(int n) {
         N = n;
     }
 
 
-    //---------------------------------------------
+    // Prints a posting list in [docId1,docId2,...] format
     public void printPostingList(Posting p) {
         System.out.print("[");
         while (p != null) {
@@ -49,19 +50,8 @@ public class Index5 {
         }
         System.out.println("]");
     }
-//    public void printPostingList(Posting p) {
-//        // Iterator<Integer> it2 = hset.iterator();
-//        System.out.print("[");
-//        while (p != null) {
-//            /// -4- **** complete here ****
-//            // fix get rid of the last comma
-//            System.out.print("" + p.docId + "," );
-//            p = p.next;
-//        }
-//        System.out.println("]");
-//    }
 
-    //---------------------------------------------
+    // Prints the entire dictionary with terms and their posting lists
     public void printDictionary() {
         Iterator it = index.entrySet().iterator();
         while (it.hasNext()) {
@@ -73,53 +63,53 @@ public class Index5 {
         System.out.println("------------------------------------------------------");
         System.out.println("*** Number of terms = " + index.size());
     }
- 
-    //-----------------------------------------------
-    public void buildIndex(String[] files) {  // from disk not from the internet
-        int fid = 0;
+
+    // Builds the inverted index from a list of files
+    public void buildIndex(String[] files) {
+        int fid = 0;  // Document ID counter
         for (String fileName : files) {
             try (BufferedReader file = new BufferedReader(new FileReader(fileName))) {
+                // Create new source record if file not already indexed
                 if (!sources.containsKey(fileName)) {
                     sources.put(fid, new SourceRecord(fid, fileName, fileName, "notext"));
                 }
                 String ln;
-                int flen = 0;
+                int flen = 0;  // Document length (word count)
                 while ((ln = file.readLine()) != null) {
-                    /// -2- **** complete here ****
-                    ///**** hint   flen +=  ________________(ln, fid);
-                    flen += indexOneLine(ln, fid);
+                    flen += indexOneLine(ln, fid); // Process each line and accumulate word count
                 }
-                sources.get(fid).length = flen;
-
+                sources.get(fid).length = flen; // Update document length
             } catch (IOException e) {
                 System.out.println("File " + fileName + " not found. Skip it");
             }
             fid++;
         }
-           printDictionary();
     }
 
-    //----------------------------------------------------------------------------  
+    // Processes a single line of text for indexing
     public int indexOneLine(String ln, int fid) {
-        int flen = 0;
+        int flen = 0;  // Word count for this line
 
-        String[] words = ln.split("\\W+");
+        String[] words = ln.split("\\W+");  // Split into words using non-word characters
       //   String[] words = ln.replaceAll("(?:[^a-zA-Z0-9 -]|(?<=\\w)-(?!\\S))", " ").toLowerCase().split("\\s+");
         flen += words.length;
         for (String word : words) {
-            word = word.toLowerCase();
-            if (stopWord(word)) {
-                continue;
-            }
-            word = stemWord(word);
+            word = word.toLowerCase();  // Case folding
+            if (stopWord(word)) continue;  // Skip stop words
+            word = stemWord(word);     // Apply stemming
+
             // check to see if the word is not in the dictionary
             // if not add it
+            // Initialize dictionary entry if new term
             if (!index.containsKey(word)) {
                 index.put(word, new DictEntry());
             }
             // add document id to the posting list
+            // Update posting list if document not already present
             if (!index.get(word).postingListContains(fid)) {
                 index.get(word).doc_freq += 1; //set doc freq to the number of doc that contain the term 
+
+                // Add new posting to the list
                 if (index.get(word).pList == null) {
                     index.get(word).pList = new Posting(fid);
                     index.get(word).last = index.get(word).pList;
@@ -128,12 +118,13 @@ public class Index5 {
                     index.get(word).last = index.get(word).last.next;
                 }
             } else {
+                // Increment term frequency within document
                 index.get(word).last.dtf += 1;
             }
             //set the term_fteq in the collection
+            // Update collection-wide term frequency
             index.get(word).term_freq += 1;
             if (word.equalsIgnoreCase("lattice")) {
-
                 System.out.println("  <<" + index.get(word).getPosting(1) + ">> " + ln);
             }
 
@@ -141,19 +132,21 @@ public class Index5 {
         return flen;
     }
 
-//----------------------------------------------------------------------------  
+    // Determines if a word should be excluded from indexing
     boolean stopWord(String word) {
+        // List of common stop words
         if (word.equals("the") || word.equals("to") || word.equals("be") || word.equals("for") || word.equals("from") || word.equals("in")
                 || word.equals("a") || word.equals("into") || word.equals("by") || word.equals("or") || word.equals("and") || word.equals("that")) {
             return true;
         }
+        // Exclude single-character words
         if (word.length() < 2) {
             return true;
         }
         return false;
 
     }
-//----------------------------------------------------------------------------  
+    // Stub for word stemming (Porter stemmer implementation needed)
 
     String stemWord(String word) { //skip for now
         return word;
@@ -163,35 +156,34 @@ public class Index5 {
 //        return s.toString();
     }
 
-    //----------------------------------------------------------------------------
+    // Performs intersection of two posting lists (AND operation)
     Posting intersect(Posting pL1, Posting pL2) {
-        Posting answer = null;
-        Posting last = null;
-        Posting p1 = pL1;
-        Posting p2 = pL2;
-
-        while (p1 != null && p2 != null) {
-            if (p1.docId == p2.docId) {
-                // Create a new node for the intersected document ID
-                Posting newNode = new Posting(p1.docId);
+        Posting answer = null;  // Result list head
+        Posting last = null;     // Result list tail
+        while (pL1 != null && pL2 != null) {
+            if (pL1.docId == pL2.docId) {  // Match found
+                // Add to result list
                 if (answer == null) {
-                    answer = newNode;
+                    answer = new Posting(pL1.docId);
                     last = answer;
                 } else {
-                    last.next = newNode;
-                    last = newNode;
+                    last.next = new Posting(pL1.docId);
+                    last = last.next;
                 }
-                p1 = p1.next;
-                p2 = p2.next;
-            } else if (p1.docId < p2.docId) {
-                p1 = p1.next;
+                pL1 = pL1.next;
+                pL2 = pL2.next;
+            }
+            // Move pointer with smaller docId
+            else if (pL1.docId < pL2.docId) {
+                pL1 = pL1.next;
             } else {
-                p2 = p2.next;
+                pL2 = pL2.next;
             }
         }
         return answer;
     }
 
+    // Processes search queries with multiple terms
     public String find_24_01(String phrase) {
         String result = "";
         String[] words = phrase.split("\\W+");
@@ -200,12 +192,14 @@ public class Index5 {
         if (len == 0) return result;  // empty query
 
         // Check first word
+        // Start with first term's posting list
         String firstWord = words[0].toLowerCase();
         if (!index.containsKey(firstWord) || index.get(firstWord).pList == null) {
             return result;
         }
         Posting posting = index.get(firstWord).pList;
 
+        // Sequentially intersect with other terms' lists
         int i = 1;
         while (i < len && posting != null) {
             String currentWord = words[i].toLowerCase();
@@ -218,6 +212,7 @@ public class Index5 {
             i++;
         }
 
+        // Format results
         while (posting != null) {
             result += "\t" + posting.docId + " - "
                     + sources.get(posting.docId).title + " - "
@@ -226,9 +221,9 @@ public class Index5 {
         }
         return result;
     }
-    
-    
-    //---------------------------------
+
+
+    // Sorts array of words using bubble sort
     String[] sort(String[] words) {  //bubble sort
         boolean sorted = false;
         String sTmp;
@@ -248,11 +243,11 @@ public class Index5 {
         return words;
     }
 
-     //---------------------------------
-
+    // Stores index to disk for persistence
     public void store(String storageName) {
         try {
-            String pathToStorage = "Y:\\FCAI\\Level 3\\Second Semester\\Information Retrieval\\Assignments\\Assignment 1\\is322_HW_1\\is322_HW_1\\test\\collection"+storageName;
+            // Write document metadata
+            String pathToStorage = "Y:\\path\\to\\your\\documents\\";
             Writer wr = new FileWriter(pathToStorage);
             for (Map.Entry<Integer, SourceRecord> entry : sources.entrySet()) {
                 System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue().URL + ", Value = " + entry.getValue().title + ", Value = " + entry.getValue().text);
@@ -263,6 +258,7 @@ public class Index5 {
                 wr.write(String.format("%4.4f", entry.getValue().norm) + ",");
                 wr.write(entry.getValue().text.toString().replace(',', '~') + "\n");
             }
+            // Write index data
             wr.write("section2" + "\n");
 
             Iterator it = index.entrySet().iterator();
@@ -287,7 +283,7 @@ public class Index5 {
             e.printStackTrace();
         }
     }
-//=========================================    
+    // Checks if storage file exists
     public boolean storageFileExists(String storageName){
         java.io.File f = new java.io.File("/home/ehab/tmp11/rl/"+storageName);
         if (f.exists() && !f.isDirectory())
@@ -295,7 +291,7 @@ public class Index5 {
         return false;
             
     }
-//----------------------------------------------------    
+    // Creates empty storage file
     public void createStore(String storageName) {
         try {
             String pathToStorage = "/home/ehab/tmp11/"+storageName;
@@ -307,14 +303,15 @@ public class Index5 {
             e.printStackTrace();
         }
     }
-//----------------------------------------------------      
-     //load index from hard disk into memory
+    // Loads index from disk storage
+    //load index from hard disk into memory
     public HashMap<String, DictEntry> load(String storageName) {
         try {
             String pathToStorage = "/home/ehab/tmp11/rl/"+storageName;         
             sources = new HashMap<Integer, SourceRecord>();
             index = new HashMap<String, DictEntry>();
             BufferedReader file = new BufferedReader(new FileReader(pathToStorage));
+            // Load document metadata
             String ln = "";
             int flen = 0;
             while ((ln = file.readLine()) != null) {
@@ -335,6 +332,7 @@ public class Index5 {
                     e.printStackTrace();
                 }
             }
+            // Load index data
             while ((ln = file.readLine()) != null) {
                 //     System.out.println(ln);
                 if (ln.equalsIgnoreCase("end")) {
